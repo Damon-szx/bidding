@@ -2,6 +2,7 @@
 from bidding.model import estimate_tokens
 import hashlib
 import json
+from bidding.content import indexed_source
 
 
 def canonical_read(store, arguments, task_id, session_id=None):
@@ -23,6 +24,16 @@ def canonical_read(store, arguments, task_id, session_id=None):
         field = parent_field + field[5:]
         requested = store.get_tool_log((requested.get('result') or {}).get('original_result_id') or requested['arguments']['log_id'])
     args.update(log_id=root['id'], field=field)
+    if args.get('block_id'):
+        source = indexed_source(root['result'])
+        blocks = source.get('content_blocks', []) if isinstance(source, dict) else []
+        index = next((index for index, block in enumerate(blocks) if block['block_id'] == args['block_id']), None)
+        if index is None:
+            raise ValueError('内容块不属于此页面版本；请从同一 original_result_id 的 content_directory 重新选择。')
+        path = f'content_blocks.{index}.text'
+        if field and field != path:
+            raise ValueError('按块读取时不混用其他 field；请只传 block_id，或使用其原始字段路径。')
+        args['field'] = path
     return args
 
 
@@ -37,6 +48,17 @@ def slice_reference(result):
     key = [result['original_result_id'], result.get('field'), result.get('offset', 0),
         result.get('end_offset'), result.get('matched')]
     return hashlib.sha256(json.dumps(key, separators=(',', ':')).encode()).hexdigest()
+
+
+def block_reference(value, field):
+    parts = field.split('.')
+    if isinstance(value, dict) and len(parts) == 3 and parts[0] == 'content_blocks' and parts[1].isdigit():
+        blocks = value.get('content_blocks', [])
+        if int(parts[1]) < len(blocks):
+            block = blocks[int(parts[1])]
+            return {**{key: block[key] for key in ('block_id', 'start', 'end')},
+                'content_version': value['content_version']}
+    return None
 
 
 def accessible(log, task_id, session_id):
@@ -77,17 +99,21 @@ def page_reference(store, value, task_id, session_id):
     return page_id
 
 
-def read_result(store, log_id, task_id, session_id=None, field='', offset=0, limit=1000, contains='', token_limit=2000):
+def read_result(store, log_id, task_id, session_id=None, field='', offset=0, limit=1000, contains='', token_limit=2000, block_id=None):
     if not isinstance(offset, int) or not isinstance(limit, int) or offset < 0 or not 1 <= limit <= 1000:
         raise ValueError('offset must be nonnegative and limit must be 1..1000')
-    args = canonical_read(store, {'log_id': log_id, 'field': field, 'offset': offset, 'limit': limit, 'contains': contains}, task_id, session_id)
+    args = canonical_read(store, {'log_id': log_id, 'field': field, 'offset': offset, 'limit': limit, 'contains': contains,
+        **({'block_id': block_id} if block_id else {})}, task_id, session_id)
     field = args['field']
     root = original_log(store, log_id, task_id, session_id)
-    value = root['result']
+    value = indexed_source(root['result']) if block_id or field.startswith(('content_blocks', 'content_directory', 'content_version')) else root['result']
     fields = list(value) if isinstance(value, dict) else []
     base = {'original_result_id': root['id'], 'source_ref': source_reference(root), 'field': field,
         'notice': '使用相同 field 和 next_offset 继续读取 original_result_id。偏移量始终对应原始来源，不对应当前切片。'}
     base['slice_id'] = slice_reference({**base, 'offset': offset})
+    reference = block_reference(value, field)
+    if reference:
+        base.update(block_ref=reference, content_scope='block')
     if not field and isinstance(value, dict):
         return {**base, 'original_fields': fields, 'content_complete': True}
     try:
@@ -132,7 +158,8 @@ def covered_read(store, arguments, log_ids, task_id, session_id=None):
     if args['contains']:
         return None
     root = original_log(store, args['log_id'], task_id, session_id)
-    value = root['result']
+    value = indexed_source(root['result'])
+    reference = block_reference(value, args['field'])
     for part in args['field'].split('.') if args['field'] else []:
         value = value[int(part)] if isinstance(value, list) else value[part]
     ranges, used = [], []
@@ -172,4 +199,6 @@ def covered_read(store, arguments, log_ids, task_id, session_id=None):
         'next_offset': end if end < len(value) else None, 'content_complete': start == 0 and end == len(value),
         'reused': True, 'covered_by_log_ids': used}
     result['slice_id'] = slice_reference(result)
+    if reference:
+        result.update(block_ref=reference, content_scope='block')
     return result

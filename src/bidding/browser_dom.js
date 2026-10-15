@@ -84,5 +84,5 @@
     text_truncated: document.body.innerText.length > 60000,
     total_projects: total ? Number(total[1].replaceAll(',', '')) : null,
     page_type: entries.length ? 'listing' : attachments.length || /\/doc\//.test(location.hash) || document.querySelector('h1, article, main h2') ? 'detail' : 'unresolved',
-    text: document.body.innerText.slice(0, 60000)};
+    text: document.body.innerText.slice(0, 60000), text_truncated: document.body.innerText.length > 60000};
 }

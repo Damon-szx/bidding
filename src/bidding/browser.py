@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from playwright.async_api import async_playwright, TimeoutError as BrowserTimeout
 from bidding.file_policy import split_attachments
+from bidding.content import index_content
 from bidding.listing import listing_fingerprint
 
 
@@ -160,6 +161,8 @@ class BrowserNavigator:
         result['network'] = session['network'][-100:]
         result['render_status'] = 'ready' if observed['page_type'] != 'unresolved' else 'unresolved'
         result['warnings'] = ['浏览器渲染的公开页面；列表状态不是已核实投标截止时间，附件类型须核验。']
+        # Re-index after rendered DOM and source-title trimming replace static text.
+        result = index_content(result)
         result['announcement_id'] = self.store.save('announcement', result)
         session['pages'][result['announcement_id']] = page
         session['used'] = time.monotonic()

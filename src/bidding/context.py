@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from bidding.model import BudgetExceeded, encoded, estimate_tokens
 from bidding.diagnostics import exception_detail
+from bidding.content import indexed_source
 from bidding.intent import authority_packet
 
 
@@ -85,13 +86,22 @@ def page_preview(result, log_id, limit):
     data['attachments'] = list(data.get('attachments', []))
     data['total_attachments'] = len(data['attachments'])
     original_text = result.get('text', '')
-    data['text'] = '' if data.get('page_type') == 'listing' else original_text[:1600]
+    block_mode = os.getenv('PAGE_CONTENT_MODE', 'blocks') != 'legacy' and data.get('page_type') == 'detail' and len(original_text) > 1600
+    if block_mode:
+        indexed = indexed_source(result)
+        data.update(content_version=indexed['content_version'], content_directory=indexed['content_directory'][:12],
+            total_content_blocks=len(indexed['content_directory']), content_index_complete=indexed['content_index_complete'])
+    data['text'] = '' if data.get('page_type') == 'listing' or block_mode else original_text[:1600]
     reduced = {'full_result_id': log_id, 'announcement_id': result.get('announcement_id'),
         'source_ref': {'result_id': log_id, 'announcement_id': result.get('announcement_id'), 'source_url': result.get('source_url')},
-        'reference_types': {'full_result_id': 'tool_log', 'announcement_id': 'page'}, 'original_fields': list(result), 'data': data,
+        'reference_types': {'full_result_id': 'tool_log', 'announcement_id': 'page'},
+        'original_fields': [key for key in result if block_mode or key not in
+            ('content_version', 'content_blocks', 'content_directory', 'content_index_complete', 'content_headings')], 'data': data,
         'preview_only': True}
     if estimate_tokens(reduced) > limit:
         # Drop bulky lists before sacrificing short, actionable source text.
+        while len(data.get('content_directory', [])) > 1 and estimate_tokens(reduced) > limit:
+            data['content_directory'].pop()
         while len(data['entries']) > 1 and estimate_tokens(reduced) > limit:
             data['entries'].pop()
         while len(data['attachments']) > 1 and estimate_tokens(reduced) > limit:
@@ -108,6 +118,28 @@ def page_preview(result, log_id, limit):
     data['attachment_status'] = 'found' if data['total_attachments'] else 'no_observed_attachments'
     reduced['notice'] = ('正文完整，可立即核验，无须重复读取。' if data['text_complete'] else
         '正文不完整，请通过 full_result_id 只读取缺失的相关段落。') + ' 附件为空是已观察结果，不代表没有文件获取按钮。'
+    if block_mode:
+        data['directory_complete'] = len(data['content_directory']) == data['total_content_blocks']
+        reduced['notice'] = '正文尚未读取。按目录 block_id 读取同一 full_result_id；目录缺项可分页读取 content_directory，或用 text/contains 检索。块编号不是按钮编号。'
+        while len(data['content_directory']) > 1 and estimate_tokens(reduced) > limit:
+            data['content_directory'].pop()
+        data['directory_complete'] = len(data['content_directory']) == data['total_content_blocks']
+        while len(data['attachments']) > 1 and estimate_tokens(reduced) > limit:
+            data['attachments'].pop()
+        data['attachments_complete'] = len(data['attachments']) == data['total_attachments']
+    # Measure after adding completion flags/notices; they also consume context.
+    for field in ('entries', 'attachments'):
+        while len(data[field]) > 1 and estimate_tokens(reduced) > limit:
+            data[field].pop()
+        data[field + '_complete'] = len(data[field]) == data['total_' + field]
+    while data.get('access_observation') and estimate_tokens(reduced) > limit:
+        data['access_observation'] = data['access_observation'][:-200]
+    while data['text'] and estimate_tokens(reduced) > limit:
+        data['text'] = data['text'][:-200]
+        data['text_complete'] = False
+        reduced['preview_only'] = True
+        if not block_mode:
+            reduced['notice'] = '正文为部分预览，请按 text/contains 读取缺失相关原文。附件为空不代表没有获取入口。'
     return reduced
 
 

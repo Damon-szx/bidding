@@ -80,7 +80,7 @@ TOOLS = [
     tool("discover_tender_files", '从已保存公告中发现候选附件。', {"announcement_id": 'fetch_tender_detail 返回的页面 ID。'}, ["announcement_id"]),
     tool('inspect_document_access', '附件为空时，检查一次已观察的 document_access 入口。报告登录、验证码、付费障碍及网站拒绝提示，不提交凭据、购买或投标表单。入口检查不等于下载。',
         {'announcement_id': '已观察的页面 ID。', 'entry_id': 'document_access 中返回的原始 entry_id。'}, ['announcement_id', 'entry_id']),
-    tool("read_tool_result", '读取工具原始输出，不读取预览包装层。优先按关键词定位正文，避免逐页扫描。', {"log_id": '工具响应中的 full_result_id。', "field": '原始结果字段路径，例如 text 或 candidates。除非 original_fields 明确列出，否则不能加 data 或 value 前缀。留空时返回字段目录。', "contains": '可选的精确关键词，用于定位文本段落，例如“截止”或“发布时间”。', "offset": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 1000}}, ["log_id"]),
+    tool("read_tool_result", '读取工具原始输出，不读取预览包装层。优先按关键词定位正文，避免逐页扫描。', {"log_id": '工具响应中的 full_result_id。', "field": '原始结果字段路径，例如 text 或 candidates。除非 original_fields 明确列出，否则不能加 data 或 value 前缀。留空时返回字段目录。', "block_id": '可选，content_directory 中属于同一来源版本的内容块编号。按块读取时 field 留空，offset/limit 对应块内字符；不能用于浏览器点击。', "contains": '可选的精确关键词，用于定位文本段落，例如“截止”或“发布时间”。', "offset": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 1000}}, ["log_id"]),
 ]
 
 
@@ -294,8 +294,8 @@ class Agent:
                 return
             download_requested = spec['action'] == 'download'
             state['download_requested'] = download_requested
-            async def read_tool_result(log_id, field="", offset=0, limit=1000, contains=""):
-                return read_result(store, log_id, task_id, session_id, field, offset, limit, contains, context.tool_limit)
+            async def read_tool_result(log_id, field="", offset=0, limit=1000, contains="", block_id=None):
+                return read_result(store, log_id, task_id, session_id, field, offset, limit, contains, context.tool_limit, block_id=block_id)
 
             def page_arguments(args):
                 if 'announcement_id' not in args:

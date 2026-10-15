@@ -15,6 +15,7 @@ import httpx
 from bs4 import BeautifulSoup
 from bidding.browser import BrowserNavigator, DownloadCapacityExceeded
 from bidding.file_policy import NonPDFFile, file_candidate, project_filename, split_attachments, validate_document
+from bidding.content import index_content
 
 
 async def validate_public_url(url):
@@ -71,10 +72,11 @@ class GenericHTMLAdapter:
         pagination = [{'entry_id': 'next-page', 'title': '下一页', 'url': urljoin(url, anchor['href']), 'kind': 'pagination'}
             for anchor in soup.select('a[href]') if anchor.get_text(strip=True) in ('下一页', '下页', 'Next')
             and urlparse(urljoin(url, anchor['href'])).scheme in ('http', 'https')][:1]
-        text = soup.get_text("\n", strip=True)[:60000]
+        full_text = soup.get_text("\n", strip=True)
+        text = full_text[:60000]
         total = re.search(r'(?:共|总计)\s*([\d,]+)\s*(?:条|个|项)', text)
         accepted, excluded = split_attachments(files[:50])
-        return {"source_url": url, "title": title.get_text(" ", strip=True) if title else None, "text": text, "project_number": None, "published_at": None, "adapter": "generic_html", "attachments": accepted, "excluded_attachments": excluded, "links": links[:100], "entries": entries[:30], "pagination": pagination, "total_projects": int(total.group(1).replace(',', '')) if total else None, "page_type": "listing" if entries else "detail" if title else "unresolved", "warnings": ["通用提取结果，公告字段及日期筛选须进一步核验。"]}
+        return {"source_url": url, "title": title.get_text(" ", strip=True) if title else None, "text": text, "text_truncated": len(full_text) > len(text), "project_number": None, "published_at": None, "adapter": "generic_html", "attachments": accepted, "excluded_attachments": excluded, "links": links[:100], "entries": entries[:30], "pagination": pagination, "total_projects": int(total.group(1).replace(',', '')) if total else None, "page_type": "listing" if entries else "detail" if title else "unresolved", "warnings": ["通用提取结果，公告字段及日期筛选须进一步核验。"]}
 
 
 class CCGPAdapter(GenericHTMLAdapter):
@@ -120,7 +122,11 @@ class Acquisition:
         self.browser = BrowserNavigator(store, validate_public_url, self.parse_page)
 
     def parse_page(self, url, html):
-        return self.adapters.get(urlparse(url).hostname, self.adapter).parse(url, html)
+        result = self.adapters.get(urlparse(url).hostname, self.adapter).parse(url, html)
+        soup = BeautifulSoup(html, 'html.parser')
+        result['content_headings'] = list(dict.fromkeys(node.get_text(' ', strip=True)
+            for node in soup.select('h1,h2,h3,h4,h5,h6')))[:100]
+        return index_content(result)
 
     async def close(self):
         await self.browser.close()

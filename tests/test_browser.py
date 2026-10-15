@@ -332,3 +332,33 @@ async def test_document_access_alert_is_logged_and_survives_projection(tmp_path,
         assert 'access_error' not in clean
     finally:
         await acquisition.close()
+
+
+@pytest.mark.skipif(not os.getenv('RUN_BROWSER_TESTS'), reason='Requires installed Chrome/Chromium')
+async def test_browser_blocks_index_final_rendered_text_and_preserve_actions(tmp_path, monkeypatch):
+    from bidding.content import index_content
+    acquisition = Acquisition(Store(tmp_path))
+    browser = acquisition.browser
+    async def validate(url):
+        assert url.startswith('https://fixture.example/')
+    browser.validate = validate
+    original_session = browser.new_session
+    async def fixture_session():
+        ident, session = await original_session()
+        async def fixture(route):
+            await route.fulfill(content_type='text/html; charset=utf-8', body='<header>网站导航</header><h1>测试招标公告</h1><p>'
+                + '项目说明' * 600 + '</p><h2>招标文件获取方式</h2><p>获取截止时间：2026-10-20。</p><button>获取招标文件</button>')
+        await session['context'].route('https://fixture.example/fixture/**', fixture)
+        return ident, session
+    monkeypatch.setattr(browser, 'new_session', fixture_session)
+    try:
+        page = await acquisition.render_tender_page('https://fixture.example/fixture/detail')
+        assert page['text'].startswith('测试招标公告')
+        assert ''.join(block['text'] for block in page['content_blocks']) == page['text']
+        assert index_content(page)['content_version'] == page['content_version']
+        assert acquisition.store.get(page['announcement_id'])['content_version'] == page['content_version']
+        assert any(block['title'] == '招标文件获取方式' for block in page['content_directory'])
+        assert page['document_access'][0]['entry_id'].startswith('b-') is False
+        assert compact_preview(page, 'page-log', 2000)['data']['document_access'] == page['document_access']
+    finally:
+        await acquisition.close()

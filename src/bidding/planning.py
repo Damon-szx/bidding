@@ -160,6 +160,7 @@ file_formats 遵循用户格式要求：仅 PDF 使用 ["pdf"]；未指定格式
 多页列表任务优先由主 Agent 读取来源一次，然后委派 page_files 完成一个有界的扫描/筛选/补证批次。主 Agent 接收结构化交接，不逐字段读取子 Agent 已给出的原文。page_files 只读取、核验和选择文件；下载排队与最终交付判断由主 Agent 执行。简单页面不必委派。
 初始计划简短，步骤说明使用简短中文。download_tender_file 由下载 Worker 使用，不能作为对话步骤规划；已授权有界下载用 plan_acquisition。
 read_tool_result 是临时观察，通常不必单独加入业务计划；列表 entries 已包含候选时，不为委派添加一个读取完整 text 的无关屏障。确需读取步骤时明确字段及范围，分页按 next_offset 继续，来源标识保持不变。
+长详情返回 content_directory 时按任务选择相关内容块，使用 read_tool_result 的 block_id 和同一来源 log_id 读取；不能把目录标题当完整证据。短正文完整时直接使用，不为分块额外安排读取。块 ID 绑定页面版本，不是 entry_id。
 未知参数可引用前置输出 {"$ref":"step_id.field.path"}，取得新结果后更新计划，不编造网址或标识。页面工具返回 announcement_id（页面 ID）、source_url、entries 和 attachments；log_id/full_result_id 是工具日志 ID，不是页面 ID。
 委派 evidence_ids 使用 {"$ref":"read_step.log_id"} 指向完整工具日志，不传页面ID或尚不存在的结果字段。scan_tender_listing 返回 candidates/unresolved_candidates，没有 entries。delegate_agent 返回 verified_projects/selected_files，没有 final_announcement_ids/selected_attachment_urls。初始只规划来源读取和有界委派，收到实际交接后再创建下载步骤；不预填未知文件地址或进度检查参数。
 navigate_tender_entry 已读取详情，不为相同正文再次抓取。读到证据前不能预填核验结论或引文，初始只规划读取，再逐项目增加参数完整、有原文支持的核验。下载依赖各自项目的核验，不能共用占位核验。
