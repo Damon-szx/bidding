@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>招标助手</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/lucide.min.js" defer></script>
+  <script src="/static/vendor/marked.min.js" defer></script>
+  <script src="/static/vendor/purify.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="workspace">
+    <aside class="sidebar" id="sidebar" aria-label="会话列表">
+      <div class="brand"><span class="brand-icon"><i data-lucide="files"></i></span><strong>招标助手</strong><button class="icon-button mobile-only" id="close-sidebar" title="关闭会话列表" aria-label="关闭会话列表"><i data-lucide="x"></i></button></div>
+      <button class="new-chat" id="new-chat"><i data-lucide="plus"></i>新建对话</button>
+      <div class="section-label">会话</div>
+      <nav id="sessions" class="sessions"></nav>
+      <button id="more-sessions" class="more" hidden>加载更多</button>
+      <div class="sidebar-footer"><span class="status-dot"></span>本地工作区<a href="/docs" target="_blank" rel="noopener" title="接口文档" aria-label="接口文档"><i data-lucide="book-open"></i></a></div>
+    </aside>
+    <main class="chat">
+      <header class="toolbar">
+        <button class="icon-button mobile-only" id="open-sidebar" title="会话列表" aria-label="会话列表"><i data-lucide="panel-left"></i></button>
+        <div class="chat-title"><strong id="conversation-title">新对话</strong><span id="task-status">就绪</span></div>
+        <button class="icon-button" id="cancel-task" title="停止当前任务" aria-label="停止当前任务" hidden><i data-lucide="square"></i></button>
+        <button class="icon-button" id="toggle-logs" title="工具调用记录" aria-label="工具调用记录" aria-expanded="false"><i data-lucide="activity"></i></button>
+      </header>
+      <div id="notice" class="notice" role="alert" hidden><span id="notice-text"></span><button id="retry" class="icon-button" title="重新连接" aria-label="重新连接"><i data-lucide="refresh-cw"></i></button></div>
+      <section id="messages" class="messages" aria-label="聊天消息" aria-live="polite"></section>
+      <section id="batch-area" class="batch-area" aria-label="下载任务" hidden><div id="batch-list"></div></section>
+      <div class="composer-area">
+        <form id="composer" class="composer">
+          <textarea id="input" rows="2" maxlength="10000" placeholder="输入招标需求或公告链接…" aria-label="消息内容"></textarea>
+          <div class="composer-bottom"><span id="composer-status">招标采集</span><button type="submit" id="send" class="send" title="发送消息" aria-label="发送消息" disabled><i data-lucide="arrow-up"></i></button></div>
+        </form>
+      </div>
+    </main>
+    <aside class="logs" id="logs" aria-label="工具调用记录" hidden>
+      <header class="logs-header"><strong>开发者记录</strong><button class="icon-button" id="close-logs" title="关闭工具记录" aria-label="关闭工具记录"><i data-lucide="x"></i></button></header>
+      <label class="usage-summary" for="audit-task">本轮请求</label>
+      <select id="audit-task" aria-label="选择执行记录对应的请求"><option value="">全部请求</option></select>
+      <div id="audit-request" class="audit-request" hidden><span>请求 ID</span><code id="audit-request-id"></code><button id="copy-request-id" class="icon-button" title="复制请求 ID" aria-label="复制请求 ID"><i data-lucide="copy"></i></button></div>
+      <div id="usage-summary" class="usage-summary">暂无 Token 记录</div>
+      <div id="log-list" class="log-list"></div>
+    </aside>
+  </div>
+  <button id="scrim" class="scrim" aria-label="关闭会话列表" hidden></button>
+</body>
+</html>

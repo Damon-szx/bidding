@@ -1,0 +1,1 @@
+"""Tender acquisition agent."""
